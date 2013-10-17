@@ -1410,31 +1410,42 @@ withValuesFromManagedObject:(NSManagedObject *)managedObject
 	
     if (NO == suppressRequest) {
 		
-		__block BOOL shouldFetch = NO;
-		if (_clientFlags.respondsToShouldFetchRemoteRelationship) {
-			[context performBlockAndWait:^{
-				shouldFetch = [self.HTTPClient shouldFetchRemoteValuesForRelationship:relationship forObjectWithID:objectID inManagedObjectContext:context];
-			}];
-		}
-				
-        __block NSMutableURLRequest *request = nil;
+		__block NSMutableURLRequest *request = nil;
 		[context performBlockAndWait:^{
-			request = [self.HTTPClient requestWithMethod:@"GET" pathForRelationship:relationship forObjectWithID:objectID withContext:context];
-		}];
-		
-		// Check etag at destination object, don't attempt to set the etag values for to-many relationships
-		NSManagedObject *object = [context existingObjectWithID:objectID error:nil];
-
-		if (![object hasFaultForRelationshipNamed:[relationship name]] && ![relationship isToMany]) {
-			NSManagedObject *destinationObject = [object valueForKey:[relationship name]];
-			// Check etag
-			NSString *etag = [destinationObject valueForKey:kAFIncrementalStoreEtagAttributeName];
-			if (etag) {
-				[request setValue:etag forHTTPHeaderField:@"Etag"];
+			BOOL shouldFetch = NO;
+			if (_clientFlags.respondsToShouldFetchRemoteRelationship) {
+				if (![[context existingObjectWithID:objectID error:nil] hasChanges]) {
+					shouldFetch = NO;
+				} else {
+					shouldFetch = [self.HTTPClient shouldFetchRemoteValuesForRelationship:relationship forObjectWithID:objectID inManagedObjectContext:context];
+				}
 			}
-		}
-        
-        if ([request URL] && ![[context existingObjectWithID:objectID error:nil] hasChanges]) {
+
+			if (shouldFetch) {
+				request = [self.HTTPClient requestWithMethod:@"GET" pathForRelationship:relationship forObjectWithID:objectID withContext:context];
+			}
+		}];
+				
+		if ([request URL]) {
+			
+			[backingContext performBlockAndWait:^{
+				NSString *resourceIdentifier = AFResourceIdentifierFromReferenceObject([self referenceObjectForObjectID:objectID]);
+				NSManagedObjectID *backingObjectID = [self objectIDForBackingObjectForEntity:[objectID entity] withResourceIdentifier:resourceIdentifier];
+				
+				// Check etag at destination object, don't attempt to set the etag values for to-many relationships
+				NSManagedObject *backingObject = (backingObjectID == nil) ? nil : [backingContext existingObjectWithID:backingObjectID error:nil];
+				
+				if (![backingObject hasFaultForRelationshipNamed:[relationship name]] && ![relationship isToMany]) {
+					NSManagedObject *destinationObject = [backingObject valueForKey:[relationship name]];
+					// Check etag
+					NSString *etag = [destinationObject valueForKey:kAFIncrementalStoreEtagAttributeName];
+					if (etag) {
+						[request setValue:etag forHTTPHeaderField:@"Etag"];
+					}
+				}
+			}];
+
+			
             NSManagedObjectContext *childContext = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
             childContext.parentContext = context;
             childContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy;
