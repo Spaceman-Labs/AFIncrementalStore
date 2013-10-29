@@ -860,7 +860,7 @@ withValuesFromManagedObject:(NSManagedObject *)managedObject
 		
 		NSURLRequest *request = [self.HTTPClient requestForUpdatedObject:updatedObject];
 		[backingContext performBlockAndWait:^{
-			if (!request) {
+			if (!request && backingObjectID) {
 				NSManagedObject *backingObject = [backingContext existingObjectWithID:backingObjectID error:nil];
 				[self updateBackingObject:backingObject withValuesFromManagedObject:updatedObject context:context];
 				[backingContext save:nil];
