@@ -1414,11 +1414,14 @@ withValuesFromManagedObject:(NSManagedObject *)managedObject
 		[context performBlockAndWait:^{
 			BOOL shouldFetch = NO;
 			if (_clientFlags.respondsToShouldFetchRemoteRelationship) {
-				if (![[context existingObjectWithID:objectID error:nil] hasChanges]) {
-					shouldFetch = NO;
-				} else {
-					shouldFetch = [self.HTTPClient shouldFetchRemoteValuesForRelationship:relationship forObjectWithID:objectID inManagedObjectContext:context];
-				}
+				// Why were we checking for changes? *shrug* Maybe the ! is wrong, maybe we don't care at all.
+//				if (![[context existingObjectWithID:objectID error:nil] hasChanges]) {
+//					shouldFetch = NO;
+//				} else {
+//					shouldFetch = [self.HTTPClient shouldFetchRemoteValuesForRelationship:relationship forObjectWithID:objectID inManagedObjectContext:context];
+//				}
+				
+				shouldFetch = [self.HTTPClient shouldFetchRemoteValuesForRelationship:relationship forObjectWithID:objectID inManagedObjectContext:context];
 			}
 
 			if (shouldFetch) {
