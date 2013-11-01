@@ -874,8 +874,13 @@ withValuesFromManagedObject:(NSManagedObject *)managedObject
 		AFHTTPRequestOperation *operation = [self.HTTPClient HTTPRequestOperationWithRequest:request success:^(AFHTTPRequestOperation *operation, id responseObject) {
 			id representationOrArrayOfRepresentations = [self.HTTPClient representationOrArrayOfRepresentationsOfEntity:entity  fromResponseObject:responseObject];
 
-			if (NO == [representationOrArrayOfRepresentations isKindOfClass:[NSDictionary class]]) {
-				return;
+			if ([representationOrArrayOfRepresentations isKindOfClass:[NSDictionary class]]) {
+                NSDictionary *representation = (NSDictionary *)representationOrArrayOfRepresentations;
+                NSDictionary *values = [self.HTTPClient attributesForRepresentation:representation ofEntity:updatedObject.entity fromResponse:operation.response];
+                [context performBlockAndWait:^{
+                    [updatedObject setValuesForKeysWithDictionary:values];
+                    [context refreshObject:updatedObject mergeChanges:YES];
+                }];
 			}
 			
 			[backingContext performBlockAndWait:^{
@@ -883,16 +888,7 @@ withValuesFromManagedObject:(NSManagedObject *)managedObject
 				[self updateBackingObject:backingObject withValuesFromManagedObject:updatedObject context:context];
 				[backingContext save:nil];
 			}];
-			
-			[context performBlockAndWait:^{
-				NSDictionary *representation = (NSDictionary *)representationOrArrayOfRepresentations;
-				__block NSDictionary *values = nil;
-				dispatch_sync(dispatch_get_main_queue(), ^{
-					values = [self.HTTPClient attributesForRepresentation:representation ofEntity:updatedObject.entity fromResponse:operation.response];
-				});
-				[updatedObject setValuesForKeysWithDictionary:values];
-				[context refreshObject:updatedObject mergeChanges:YES];
-			}];
+
 			
 			[[NSNotificationCenter defaultCenter] postNotificationName:AFIncrementalStoreDidFinishSaveRequestOperation
 																object:self
